@@ -17,6 +17,25 @@ If a user cannot see a document, it must never enter the retrieval pipeline at a
    users cannot reach documents outside their permissions, including edge cases:
    group membership changes, revoked access, and documents with empty ACLs.
 
+## How it works
+
+```
+                        ┌─────────────────────────────┐
+  query + user ────────▶│ 1. PERMISSION FILTER FIRST  │──▶ forbidden docs never
+                        │    WHERE acl && principals  │    leave the database
+                        └──────────────┬──────────────┘
+                                       │ allowed docs only
+                                       ▼
+                        ┌─────────────────────────────┐
+                        │ 2. RANK within the allowed  │──▶ top-k the user
+                        │    set (vector similarity)  │    may actually see
+                        └─────────────────────────────┘
+```
+
+Post-filtering (rank first, hide forbidden docs after) is the common
+mistake: ranking scores leak information about documents the user must not
+know exist, and you pay to rank documents you will discard.
+
 ## Quickstart
 
 ```bash
@@ -31,7 +50,7 @@ each one only ever sees their own slice.
 To run against real pgvector instead of the in-memory store:
 
 ```bash
-docker run -d -p 5432:5432 -e POSTGRES_PASSWORD=demo pgvector/pgvector:pg16
+docker compose up -d
 export DATABASE_URL=postgresql://postgres:demo@localhost:5432/postgres
 pip install -e ".[pgvector]"
 python examples/demo.py --backend pgvector
@@ -68,3 +87,7 @@ The permission logic is identical either way, which is the point.
 
 Blog post: *RAG is easy until permissions matter* (link when published).
 Talk: MLOps World 2026, AI+IM Global Summit 2027 (proposed).
+
+## License
+
+MIT. See [LICENSE](LICENSE).

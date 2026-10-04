@@ -16,6 +16,10 @@ class User:
     id: str
     groups: frozenset[str] = frozenset()
 
+    def __post_init__(self) -> None:
+        # Accept any iterable; the frozen dataclass keeps a frozenset.
+        object.__setattr__(self, "groups", frozenset(self.groups))
+
 
 @dataclass
 class Document:

@@ -5,14 +5,29 @@ on: [push, pull_request]
 jobs:
   build:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_PASSWORD: demo
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=5s --health-timeout=5s --health-retries=5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}
       - name: Install
-        run: pip install -e ".[test]"
+        run: pip install -e ".[pgvector,test]"
       - name: Lint
         run: ruff check src tests examples
-      - name: Leak tests
+      - name: Tests (incl. pgvector integration)
         run: python -m pytest tests/ -q
+        env:
+          DATABASE_URL: postgresql://postgres:demo@localhost:5432/postgres

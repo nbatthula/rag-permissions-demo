@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Callable
+from typing import Self
 
 from .acl import Document, User, permission_filter
 from .scoring import Scorer, keyword_overlap_score
@@ -47,7 +48,11 @@ class PgVectorStore:
         cls, dsn: str | None = None, embed: Embedder | None = None
     ) -> PgVectorStore:
         """Connect and ensure the schema exists. Constructors do no I/O."""
-        dsn = dsn or os.environ["DATABASE_URL"]
+        dsn = dsn or os.environ.get("DATABASE_URL")
+        if not dsn:
+            raise ValueError(
+                "PgVectorStore needs a DSN: pass dsn=... or set DATABASE_URL"
+            )
         store = cls(dsn, embed or insecure_demo_embed)
         store.init_schema()
         return store
@@ -103,6 +108,12 @@ class PgVectorStore:
 
     def close(self) -> None:
         self._conn.close()
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        self.close()
 
 
 def insecure_demo_embed(text: str, dim: int = 384) -> list[float]:
