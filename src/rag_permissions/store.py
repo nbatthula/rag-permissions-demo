@@ -58,6 +58,9 @@ class PgVectorStore:
         return store
 
     def init_schema(self) -> None:
+        # The pgvector image ships the extension installed but not enabled;
+        # the VECTOR type does not exist until this runs.
+        self._conn.execute("CREATE EXTENSION IF NOT EXISTS vector")
         self._conn.execute(
             """
             CREATE TABLE IF NOT EXISTS rag_docs (
