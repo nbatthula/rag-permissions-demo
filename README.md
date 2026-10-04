@@ -20,8 +20,8 @@ If a user cannot see a document, it must never enter the retrieval pipeline at a
 ## Quickstart
 
 ```bash
-pip install -r requirements.txt
-python src/demo.py
+pip install -e .
+python examples/demo.py
 ```
 
 `demo.py` seeds a small corpus where different documents belong to different
@@ -33,24 +33,36 @@ To run against real pgvector instead of the in-memory store:
 ```bash
 docker run -d -p 5432:5432 -e POSTGRES_PASSWORD=demo pgvector/pgvector:pg16
 export DATABASE_URL=postgresql://postgres:demo@localhost:5432/postgres
-python src/demo.py --backend pgvector
+pip install -e ".[pgvector]"
+python examples/demo.py --backend pgvector
 ```
+
+Note: the pgvector path uses a clearly-labeled demo-only pseudo-embedder
+(`insecure_demo_embed`) so it runs without an embedding model or API key.
+It carries no semantic meaning; swap in a real embedding model for serious use.
+The permission logic is identical either way, which is the point.
 
 ## Layout
 
-- `src/acl.py` — the permission model: documents, users, groups, and the
-  retrieval-time enforcement function. This is the heart of the demo.
-- `src/store.py` — vector store with an in-memory backend for the demo and a
-  pgvector backend for real runs. Both enforce ACLs identically.
-- `src/demo.py` — the runnable story: seed, query as three users, show the slices.
+- `src/rag_permissions/acl.py` — the permission model: documents, users,
+  groups, and the retrieval-time enforcement function. This is the heart of
+  the demo.
+- `src/rag_permissions/scoring.py` — relevance scoring, deliberately separated
+  from permission logic. Swap the scorer without touching permissions.
+- `src/rag_permissions/store.py` — vector stores with identical permission
+  semantics: an in-memory backend for the demo and a pgvector backend that
+  pushes the ACL check into the SQL `WHERE` clause (with a GIN index so the
+  check stays fast). Constructors do no I/O; use `PgVectorStore.connect()`.
+- `examples/demo.py` — the runnable story: seed, query as three users, show
+  the slices.
 - `tests/test_acl.py` — leak tests. The whole point in executable form.
 
 ## Roadmap
 
+- [x] CI gate: the build fails if any leak test fails (`.github/workflows/ci.yml`)
 - [ ] Weaviate backend alongside pgvector
 - [ ] Group-membership change propagation (stale permission windows)
 - [ ] Latency comparison: pre-filter vs post-filter at 1M chunks
-- [x] CI gate: the build fails if any leak test fails (`.github/workflows/ci.yml`)
 
 ## Companion reading
 

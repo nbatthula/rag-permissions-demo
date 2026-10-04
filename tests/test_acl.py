@@ -3,15 +3,11 @@
 These tests don't check happy paths. They try to make the system leak
 documents to users who must not see them, and assert it cannot.
 """
-import sys
-
-sys.path.insert(0, "src")
-
-from acl import Document, User, can_access, permission_filter
-from store import InMemoryStore
+from rag_permissions.acl import Document, User, can_access, permission_filter
+from rag_permissions.store import InMemoryStore
 
 
-def _corpus():
+def _corpus() -> list[Document]:
     return [
         Document(id="d1", text="payments roadmap", acl={"alice", "team-payments"}),
         Document(id="d2", text="search roadmap", acl={"bob", "team-search"}),
@@ -21,48 +17,45 @@ def _corpus():
     ]
 
 
-def test_user_cannot_see_others_docs():
+def test_user_sees_only_their_slice() -> None:
     alice = User(id="alice", groups=frozenset({"team-payments"}))
     visible = {d.id for d in permission_filter(alice, _corpus())}
-    assert visible == {"d1", "d3"}, f"alice saw wrong set: {visible}"
+    assert visible == {"d1", "d3"}
 
 
-def test_group_membership_grants_access():
+def test_group_membership_grants_access() -> None:
     dave = User(id="dave", groups=frozenset({"team-search"}))
-    assert can_access(dave, _corpus()[1])  # d2 via team-search
-    assert not can_access(dave, _corpus()[0])  # d1 is payments-only
+    docs = _corpus()
+    assert can_access(dave, docs[1])  # d2 via team-search
+    assert not can_access(dave, docs[0])  # d1 is payments-only
 
 
-def test_empty_acl_is_fail_closed():
+def test_empty_acl_is_fail_closed() -> None:
     # A document with no ACL must reach NOBODY, not everybody.
     carol = User(id="carol", groups=frozenset({"exec"}))
     assert not can_access(carol, _corpus()[4])
 
 
-def test_revoked_access_disappears():
-    # Simulate group removal: user loses team-search, keeps nothing else.
-    bob = User(id="bob", groups=frozenset())  # removed from team-search
-    docs = _corpus()
-    # d2's ACL still names bob directly, so it stays visible...
-    assert can_access(bob, docs[1])
-    # ...but a group-only doc must vanish once membership is gone.
-    d3 = Document(id="d3x", text="x", acl={"team-search"})
-    assert not can_access(bob, d3)
+def test_revoked_group_membership_removes_access() -> None:
+    bob = User(id="bob", groups=frozenset({"team-search"}))
+    doc = Document(id="d", text="search roadmap", acl={"team-search"})
+    assert can_access(bob, doc)
+    bob_removed = User(id="bob", groups=frozenset())  # dropped from team-search
+    assert not can_access(bob_removed, doc)
 
 
-def test_store_enforces_before_ranking():
+def test_store_never_surfaces_forbidden_docs() -> None:
     store = InMemoryStore()
-    for d in _corpus():
-        store.add(d)
-    mallory = User(id="mallory", groups=frozenset())
-    hits = store.search(mallory, "roadmap layoff orphan", top_k=10)
-    assert hits == [], f"mallory (no permissions) saw: {[h.id for h in hits]}"
+    for doc in _corpus():
+        store.add(doc)
+    mallory = User(id="mallory", groups=frozenset())  # no permissions at all
+    assert store.search(mallory, "roadmap layoff orphan", top_k=10) == []
 
 
-def test_search_never_leaks_across_users():
+def test_every_search_hit_passes_can_access() -> None:
     store = InMemoryStore()
-    for d in _corpus():
-        store.add(d)
+    for doc in _corpus():
+        store.add(doc)
     users = [
         User(id="alice", groups=frozenset({"team-payments"})),
         User(id="bob", groups=frozenset({"team-search"})),
