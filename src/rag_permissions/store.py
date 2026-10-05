@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import os
 from collections.abc import Callable
-from typing import Self
 
 from .acl import Document, User, permission_filter
 from .scoring import Scorer, keyword_overlap_score
@@ -112,7 +111,7 @@ class PgVectorStore:
     def close(self) -> None:
         self._conn.close()
 
-    def __enter__(self) -> Self:
+    def __enter__(self) -> "PgVectorStore":
         return self
 
     def __exit__(self, *exc: object) -> None:
